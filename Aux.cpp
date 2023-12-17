@@ -1,37 +1,9 @@
 
-#include <pcl/visualization/cloud_viewer.h>
+#include <thread>
 #include <pcl/io/auto_io.h>
 #include <pcl/common/time.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/visualization/common/common.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl/octree/octree_search.h>
-#include <pcl/io/ply_io.h>
-#include <thread>
-#include <pcl/io/auto_io.h>
-#include <pcl/common/time.h>
-#include <pcl/octree/octree_pointcloud_voxelcentroid.h>
-#include <pcl/common/centroid.h>
-#include <pcl/filters/filter.h>
-#include <pcl/visualization/cloud_viewer.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl/filters/crop_box.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/features/normal_3d.h>
-#include <pcl/octree/octree_search.h>
-#include <pcl/features/normal_3d.h>
-#include <pcl/io/ply_io.h>
-#include <pcl/octree/octree_pointcloud_voxelcentroid.h>
-#include <pcl/visualization/cloud_viewer.h>
-#include <pcl/visualization/pcl_visualizer.h> // For visualization
-#include <pcl/visualization/cloud_viewer.h>   // Alternatively, for cloud viewing
-#include <pcl/octree/octree_pointcloud_voxelcentroid.h>
-#include <pcl/visualization/cloud_viewer.h>
-
-
-#include <thread>
-#include <pcl/io/auto_io.h>
-#include <pcl/common/time.h>
 #include <pcl/octree/octree_pointcloud_voxelcentroid.h>
 #include <pcl/common/centroid.h>
 #include <pcl/filters/filter.h>
@@ -41,39 +13,38 @@
 #include <vtkCleanPolyData.h>
 #include <chrono>
 
-#include <iostream>
-#include <vector>
-#include <ctime>
-#include <string>
-#include <chrono>
 
-#include <thread>
 
-#include <pcl/io/auto_io.h>
-#include <pcl/common/time.h>
 
-#include <pcl/octree/octree_pointcloud_voxelcentroid.h>
-#include <pcl/common/centroid.h>
+pcl::PointXYZ computeCentroidOfVoxel(const pcl::PointCloud<pcl::PointXYZ>& vecOfVectors) {
+    pcl::PointXYZ average;
 
-#include <pcl/filters/filter.h>
+    for (const auto& vec : vecOfVectors) {
+        average.x += vec.x;
+        average.y += vec.y;
+        average.z += vec.z;
+    }
 
-#include <vtkRenderer.h>
-#include <vtkRenderWindow.h>
-#include <vtkCubeSource.h>
-#include <vtkCleanPolyData.h>
+    const float V_size = vecOfVectors.size();
+    average.x = average.x / V_size;
+    average.y = average.y / V_size;
+    average.z = average.z / V_size;
+
+
+    return average;
+}
+
 
 using namespace std::chrono_literals;
-
-
 
 class OctreeViewer
 {
 public:
     OctreeViewer (std::string &filename, double resolution) :
             viz ("Octree visualizator"),
-            cloud (new pcl::PointCloud<pcl::PointXYZLNormal>()),
-            displayCloud (new pcl::PointCloud<pcl::PointXYZLNormal>()),
-            cloudVoxel (new pcl::PointCloud<pcl::PointXYZLNormal>()),
+            cloud (new pcl::PointCloud<pcl::PointXYZ>()),
+            displayCloud (new pcl::PointCloud<pcl::PointXYZ>()),
+            cloudVoxel (new pcl::PointCloud<pcl::PointXYZ>()),
             octree (resolution)
     {
 
@@ -119,17 +90,17 @@ private:
     // PRIVATE ATTRIBUTES
     //========================================================
     //visualizer
-    pcl::PointCloud<pcl::PointXYZLNormal>::Ptr xyz;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr xyz;
 
     pcl::visualization::PCLVisualizer viz;
     //original cloud
-    pcl::PointCloud<pcl::PointXYZLNormal>::Ptr cloud;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
     //displayed_cloud
-    pcl::PointCloud<pcl::PointXYZLNormal>::Ptr displayCloud;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr displayCloud;
     // cloud which contains the voxel center
-    pcl::PointCloud<pcl::PointXYZLNormal>::Ptr cloudVoxel;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloudVoxel;
     //octree
-    pcl::octree::OctreePointCloudVoxelCentroid<pcl::PointXYZLNormal> octree;
+    pcl::octree::OctreePointCloudVoxelCentroid<pcl::PointXYZ> octree;
     //level
     int displayedDepth;
     //bool to decide what should be display
@@ -281,7 +252,7 @@ private:
         if (show_centroids_)
         {
             //show centroid points
-            pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZLNormal> color_handler (cloudVoxel, "x");
+            pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloudVoxel, "x");
             viz.addPointCloud (cloudVoxel, color_handler, "cloud_centroid");
             viz.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size_, "cloud_centroid");
         }
@@ -289,7 +260,7 @@ private:
         if (show_original_points_)
         {
             //show origin point cloud
-            pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZLNormal> color_handler (cloud, "z");
+            pcl::visualization::PointCloudColorHandlerGenericField<pcl::PointXYZ> color_handler (cloud, "z");
             viz.addPointCloud (cloud, color_handler, "cloud");
             viz.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size_, "cloud");
         }
@@ -378,12 +349,12 @@ private:
         displayCloud->points.clear();
         cloudVoxel->points.clear();
 
-        pcl::PointXYZLNormal pt_voxel_center;
-        pcl::PointXYZLNormal pt_centroid;
+        pcl::PointXYZ pt_voxel_center;
+        pcl::PointXYZ pt_centroid;
         std::cout << "===== Extracting data at depth " << depth << "... " << std::flush;
         double start = pcl::getTime ();
 
-        for (pcl::octree::OctreePointCloudVoxelCentroid<pcl::PointXYZLNormal>::FixedDepthIterator tree_it = octree.fixed_depth_begin (depth);
+        for (pcl::octree::OctreePointCloudVoxelCentroid<pcl::PointXYZ>::FixedDepthIterator tree_it = octree.fixed_depth_begin (depth);
              tree_it != octree.fixed_depth_end ();
              ++tree_it)
         {
@@ -399,7 +370,7 @@ private:
             // If the asked depth is the depth of the octree, retrieve the centroid at this LeafNode
             if (octree.getTreeDepth () == static_cast<unsigned int>(depth))
             {
-                auto* container = dynamic_cast<pcl::octree::OctreePointCloudVoxelCentroid<pcl::PointXYZLNormal>::LeafNode*> (tree_it.getCurrentOctreeNode ());
+                auto* container = dynamic_cast<pcl::octree::OctreePointCloudVoxelCentroid<pcl::PointXYZ>::LeafNode*> (tree_it.getCurrentOctreeNode ());
 
                 container->getContainer ().getCentroid (pt_centroid);
             }
@@ -408,11 +379,11 @@ private:
             {
                 // Retrieve every centroid under the current BranchNode
                 pcl::octree::OctreeKey dummy_key;
-                pcl::PointCloud<pcl::PointXYZLNormal>::VectorType voxelCentroids;
-                octree.getVoxelCentroidsRecursive (dynamic_cast<pcl::octree::OctreePointCloudVoxelCentroid<pcl::PointXYZLNormal>::BranchNode*> (*tree_it), dummy_key, voxelCentroids);
+                pcl::PointCloud<pcl::PointXYZ>::VectorType voxelCentroids;
+                octree.getVoxelCentroidsRecursive (dynamic_cast<pcl::octree::OctreePointCloudVoxelCentroid<pcl::PointXYZ>::BranchNode*> (*tree_it), dummy_key, voxelCentroids);
 
                 // Iterate over the leafs to compute the centroid of all of them
-                pcl::CentroidPoint<pcl::PointXYZLNormal> centroid;
+                pcl::CentroidPoint<pcl::PointXYZ> centroid;
                 for (const auto &voxelCentroid : voxelCentroids)
                 {
                     centroid.add (voxelCentroid);
@@ -461,134 +432,3 @@ private:
     }
 
 };
-
-
-pcl::PointXYZ computeCentroidOfVoxel(const pcl::PointCloud<pcl::PointXYZ>& vecOfVectors) {
-    pcl::PointXYZ average;
-
-    for (const auto& vec : vecOfVectors) {
-        average.x += vec.x;
-        average.y += vec.y;
-        average.z += vec.z;
-    }
-
-    const float V_size = vecOfVectors.size();
-    average.x = average.x / V_size;
-    average.y = average.y / V_size;
-    average.z = average.z / V_size;
-
-
-    return average;
-}
-
-
-
-int main() {
-
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr S_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr S_cloud_Box_filtered(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr S_cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr temp_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr downsampled_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-
-    S_cloud->clear();
-    S_cloud_Box_filtered->clear();
-    S_cloud_filtered->clear();
-    downsampled_cloud->clear();
-    temp_cloud->clear();
-
-
-    if (pcl::io::loadPLYFile<pcl::PointXYZ>("Apple_and_lemon.ply", *S_cloud) == -1) //* load the file
-    {
-        PCL_ERROR ("Couldn't read file test_pcd.pcd \n");
-        return (-1);
-    }
-
-
-    pcl::CropBox<pcl::PointXYZ> cropFilter;
-    Eigen::Vector4f minPoint(-2.0, -2.0, -2.0, 2.0); // Define your minimum point
-    Eigen::Vector4f maxPoint(2.0, 2.0, 2.0, 2.0);    // Define your maximum point
-    cropFilter.setInputCloud(S_cloud); // Input cloud
-    cropFilter.setMin(minPoint);
-    cropFilter.setMax(maxPoint);
-    cropFilter.filter(*S_cloud_Box_filtered); // Apply the filter
-
-    cout << "Box cloud size " << S_cloud_Box_filtered->size() << endl;
-
-
-    // ***** OCtree Downsampling
-
-
-    std::vector<int> Indices_of_points_in_one_voxel;
-
-    float resolution = 0.0015;
-    pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree (resolution);
-    octree.setInputCloud (S_cloud_Box_filtered);
-    octree.addPointsFromInputCloud ();
-
-
-    int c {0};
-    auto octree_it = octree.begin();
-    while (octree_it != octree.end())
-    {
-        temp_cloud->clear();
-        if (octree_it.isLeafNode())
-        {
-            c++;
-            Indices_of_points_in_one_voxel = (octree_it.getLeafContainer().getPointIndicesVector());
-            for (auto i : Indices_of_points_in_one_voxel)
-            {
-                temp_cloud->push_back(S_cloud_Box_filtered->points[i]);
-            }
-            downsampled_cloud->push_back(computeCentroidOfVoxel(*temp_cloud));
-
-        }
-        ++octree_it;
-
-    }
-
-    pcl::io::savePLYFile("Downsampled.ply", *downsampled_cloud);
-
-    cout << "number of Voxels in the tree " << c << endl;
-
-    cout << "number of points in the downsampled Cloud " << downsampled_cloud->size() << endl;
-
-/*    std::string fileNAme = "Downsampled.ply";
-    OctreeViewer (fileNAme, resolution);*/
-
-
-    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
-    ne.setInputCloud (downsampled_cloud);
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
-    ne.setSearchMethod (tree);
-    pcl::PointCloud<pcl::Normal>::Ptr normals_cloud (new pcl::PointCloud<pcl::Normal>);
-    ne.setRadiusSearch (0.6);
-    ne.compute (*normals_cloud);
-
-    std::cout << "S* before Normal estimate : " << downsampled_cloud->size()<<std::endl;
-    std::cout << "S* after  Normal estimate : " << normals_cloud->size() << std::endl;
-
-    pcl::PointCloud<pcl::PointXYZLNormal>::Ptr Downsampled_with_normals (new pcl::PointCloud<pcl::PointXYZLNormal>);
-    pcl::concatenateFields (*downsampled_cloud, *normals_cloud, *Downsampled_with_normals);
-    pcl::io::savePLYFile("Downsampled_with_normals.ply", *Downsampled_with_normals);
-
-
-    //**-----------------------VISUALIZE THE CLOUD ---------------------------------------------------------------------
-
-  /*  std::string fileName = "Centroids_of_Octree_Scene.ply";
-    OctreeViewer(fileName, 0.0015);*/
-
-/*
-
-    pcl::octree::OctreePointCloudSearch<pcl::PointXYZLNormal> octree2 (resolution);
-    octree2.setInputCloud (S_start_full);
-    octree2.addPointsFromInputCloud ();
-*/
-
-
-
-
-
-    return 0;
-}

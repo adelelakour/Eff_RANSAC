@@ -49,6 +49,7 @@ std::vector<int> stringToVector(const std::string& str) {
 }
 
 
+
 std::string fromVectorToString(Eigen::Vector3d const &vector) {
     return std::to_string(vector.x()) + ";" + std::to_string(vector.y()) + ";" + std::to_string(vector.z());
 }
@@ -161,7 +162,7 @@ OuterMap Compute_HashTable(float radius, double pointSphereRelativeTolerance, st
     std::vector<float> point_distances;
 
 
-    std::string directory_path = "../YCB_ply/Selected_two";
+    std::string directory_path = path_to_models;
     std::string extension = ".ply";
     std::string Model_Name;
     std::string file_path;

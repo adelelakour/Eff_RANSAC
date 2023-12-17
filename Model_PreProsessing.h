@@ -55,6 +55,7 @@ double Euclidean_Distance_two_Vectors(Eigen::Vector3f A, Eigen::Vector3f B);
 Eigen::Vector3f U_sub_V(Eigen::Vector3f A, Eigen::Vector3f B);
 Eigen::Vector3f V_sub_U(Eigen::Vector3f A, Eigen::Vector3f B);
 
+
 Eigen::Vector3f Compute_the_descriptor (pcl::PointXYZLNormal U, pcl::PointXYZLNormal V);
 OuterMap Compute_HashTable(float radius, double pointSphereRelativeTolerance, std::string path_to_models);
 bool serializeHashMap(const OuterMap& data, const std::string& filename);

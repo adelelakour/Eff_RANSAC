@@ -26,7 +26,7 @@ add_library(ObjectModel
 add_executable(Cereal_version main.cpp
         SerializeDeserialize.cpp
         Database.cpp
-        SeializeDeserialize.h)
+        )
 
 
 target_link_libraries(Cereal_version PUBLIC ObjectModel
