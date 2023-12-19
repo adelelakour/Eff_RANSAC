@@ -50,10 +50,8 @@ std::string fromVectorToString(Eigen::Vector3f const &vector);
 
 
 
-double Angle_Two_Vectors(Eigen::Vector3f Vector_A, Eigen::Vector3f Vector_B);
-double Euclidean_Distance_two_Vectors(Eigen::Vector3f A, Eigen::Vector3f B);
-Eigen::Vector3f U_sub_V(Eigen::Vector3f A, Eigen::Vector3f B);
-Eigen::Vector3f V_sub_U(Eigen::Vector3f A, Eigen::Vector3f B);
+float Angle_between_two_vectors ( Eigen::Vector3f U, Eigen::Vector3f V);
+
 
 
 Eigen::Vector3f Compute_the_descriptor (pcl::PointXYZLNormal U, pcl::PointXYZLNormal V);

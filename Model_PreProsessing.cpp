@@ -50,7 +50,7 @@ std::vector<int> stringToVector(const std::string& str) {
 
 
 
-std::string fromVectorToString(Eigen::Vector3d const &vector) {
+std::string fromVectorToString(Eigen::Vector3f const &vector) {
     return std::to_string(vector.x()) + ";" + std::to_string(vector.y()) + ";" + std::to_string(vector.z());
 }
 
@@ -62,7 +62,7 @@ Eigen::Vector3d fromStringToVectorD(std::string const &vectorAsString) {
 }
 
 
-std::string fromVectorToString(Eigen::Vector3f const &vector) {
+std::string fromVectorToString(Eigen::Vector3d const &vector) {
     return std::to_string(vector.x()) + ";" + std::to_string(vector.y()) + ";" + std::to_string(vector.z());
 }
 
@@ -78,21 +78,23 @@ double angleRadians;
 double angleDegrees;
 
 
-double Angle_Two_Vectors(Eigen::Vector3f Vector_A, Eigen::Vector3f Vector_B) {
+float Angle_between_two_vectors ( Eigen::Vector3f U, Eigen::Vector3f V)
+{
+    float angle;
+    auto dot = (U.x() * V.x()) + (U.y() * V.y()) + (U.z() * V.z());
+    auto cross_x = (U.y() * V.z()) - (U.z()*V.y());
+    auto cross_y = (U.z() * V.x()) - (U.x() * V.z());
+    auto cross_z = ( U.x() * V.y()) - ( U.y() * V.x() );
 
-    dotProduct = Vector_A.dot(Vector_B);
-    magnitudeA = Vector_A.norm();
-    magnitudeB = Vector_B.norm();
+    auto det = sqrt(cross_x*cross_x + cross_y*cross_y + cross_z*cross_z);
+    angle = atan2(det, dot);
 
-    // Compute the angle in radians
-    angleRadians = std::acos(dotProduct / (magnitudeA * magnitudeB));
-
-    // Convert the angle to degrees
-    angleDegrees = angleRadians * 180.0 / M_PI;
-
-    return angleDegrees;
+    return angle;
 }
 
+
+
+/*
 inline double Euclidean_Distance_two_Vectors(Eigen::Vector3f A, Eigen::Vector3f B) {
     double Distance = std::sqrt(
             std::pow(B.x() - A.x(), 2) +
@@ -101,37 +103,21 @@ inline double Euclidean_Distance_two_Vectors(Eigen::Vector3f A, Eigen::Vector3f 
     );
     return Distance;
 }
-
-inline Eigen::Vector3f U_sub_V(Eigen::Vector3f A, Eigen::Vector3f B) {
-    Eigen::Vector3f U_sub_V;
-    A_B.x() = A.x() - B.x();
-    A_B.y() = A.y() - B.y();
-    A_B.z() = A.z() - B.z();
-    return U_sub_V;
-}
-
-inline Eigen::Vector3f V_sub_U(Eigen::Vector3f A, Eigen::Vector3f B) {
-    Eigen::Vector3f V_sub_U;
-    B_A.x() = B.x() - A.x();
-    B_A.y() = B.y() - A.y();
-    B_A.z() = B.z() - A.z();
-    return V_sub_U;
-}
-
+*/
 
 
 Eigen::Vector3f Compute_the_descriptor (pcl::PointXYZLNormal U, pcl::PointXYZLNormal V)
 {
     Eigen::Vector3f Descriptor;
-    Eigen::Vector3f P_U = {U.x, U.y, U.z};
-    Eigen::Vector3f P_V = {V.x, V.y, V.z};
+    Eigen::Vector3f P_u = {U.x, U.y, U.z};
+    Eigen::Vector3f P_v = {V.x, V.y, V.z};
 
-    Eigen::Vector3f N_U = {U.normal_x, U.normal_y, U.normal_z};
-    Eigen::Vector3f N_V = {V.normal_x, V.normal_y, V.normal_z};
+    Eigen::Vector3f N_u = {U.normal_x, U.normal_y, U.normal_z};
+    Eigen::Vector3f N_v = {V.normal_x, V.normal_y, V.normal_z};
 
-    Descriptor[0] = Angle_Two_Vectors(N_U, N_V);
-    Descriptor[1] = Angle_Two_Vectors (N_U, V_sub_U(P_V, P_U));
-    Descriptor[2] = Angle_Two_Vectors (N_V, U_sub_V(P_U, P_V));
+    Descriptor[0] = Angle_between_two_vectors(N_u, N_v);
+    Descriptor[1] = Angle_between_two_vectors (N_u, P_v-P_u);
+    Descriptor[2] = Angle_between_two_vectors (N_v, P_u-P_v);
 
     return Descriptor;
 
@@ -149,10 +135,10 @@ OuterMap Compute_HashTable(float radius, double pointSphereRelativeTolerance, st
 
     pcl::PointXYZLNormal U_XYZNorm;
     pcl::PointXYZLNormal V_XYZNorm;
-    Eigen::Vector3f U_n = Eigen::Vector3f::Zero();
-    Eigen::Vector3f V_n = Eigen::Vector3f::Zero();
-    Eigen::Vector3f U_p = Eigen::Vector3f::Zero();
-    Eigen::Vector3f V_p = Eigen::Vector3f::Zero();
+    Eigen::Vector3f N_u = Eigen::Vector3f::Zero();
+    Eigen::Vector3f N_v = Eigen::Vector3f::Zero();
+    Eigen::Vector3f P_u = Eigen::Vector3f::Zero();
+    Eigen::Vector3f P_v = Eigen::Vector3f::Zero();
 
     One_PAIR Detected_pairs;
     double pointDistance;
@@ -192,8 +178,8 @@ OuterMap Compute_HashTable(float radius, double pointSphereRelativeTolerance, st
         for (size_t i = 0; i < Model_Cloud->size(); ++i) {
             U_XYZNorm = Model_Cloud->at(i);
 
-            U_p = Eigen::Vector3f(U_XYZNorm.x, U_XYZNorm.y, U_XYZNorm.z);
-            U_n = Eigen::Vector3f(U_XYZNorm.normal_x, U_XYZNorm.normal_y, U_XYZNorm.normal_z);
+            P_u = Eigen::Vector3f(U_XYZNorm.x, U_XYZNorm.y, U_XYZNorm.z);
+            N_u = Eigen::Vector3f(U_XYZNorm.normal_x, U_XYZNorm.normal_y, U_XYZNorm.normal_z);
 
             kdtree_of_Model_Cloud.radiusSearch(U_XYZNorm, radius, point_indices, point_distances);
             // std::cout << "number of points within this sphere is : " << point_indices.size() << std::endl;
@@ -206,21 +192,17 @@ OuterMap Compute_HashTable(float radius, double pointSphereRelativeTolerance, st
                 if (pointDistance < radius * (1 + pointSphereRelativeTolerance) &&
                     pointDistance > radius * (1 - pointSphereRelativeTolerance)) {
                     // std::cout << "I found a Pair in " << Model_Name << std::endl;
-                    V_p = Eigen::Vector3f(V_XYZNorm.x,
+                    P_v = Eigen::Vector3f(V_XYZNorm.x,
                                           V_XYZNorm.y,
                                           V_XYZNorm.z);
 
-                    V_n = Eigen::Vector3f(V_XYZNorm.normal_x,
+                    N_v = Eigen::Vector3f(V_XYZNorm.normal_x,
                                           V_XYZNorm.normal_y,
                                           V_XYZNorm.normal_z);
 
-                    Hash_key[0] = Angle_Two_Vectors(U_n, V_n);
-
-                    auto Pu_Pv = U_sub_V(U_p, V_p);
-                    auto Pv_Pu = V_sub_U(U_p, V_p);
-
-                    Hash_key[1] = Angle_Two_Vectors(U_n, Pv_Pu);
-                    Hash_key[2] = Angle_Two_Vectors(V_n, Pu_Pv);
+                    Hash_key[0] = Angle_between_two_vectors(N_u, N_v);
+                    Hash_key[1] = Angle_between_two_vectors(N_u, P_v-P_u);
+                    Hash_key[2] = Angle_between_two_vectors(N_v, P_u-P_v);
 
                     Detected_pairs.first = U_XYZNorm;
                     Detected_pairs.second = V_XYZNorm;

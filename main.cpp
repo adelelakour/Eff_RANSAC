@@ -27,7 +27,8 @@
 #include <pcl/visualization/cloud_viewer.h>   // Alternatively, for cloud viewing
 #include <pcl/octree/octree_pointcloud_voxelcentroid.h>
 #include <pcl/visualization/cloud_viewer.h>
-
+#include "Model_PreProsessing.h"
+#include "Database.h"
 
 #include <thread>
 #include <pcl/io/auto_io.h>
@@ -61,6 +62,7 @@
 #include <vtkRenderWindow.h>
 #include <vtkCubeSource.h>
 #include <vtkCleanPolyData.h>
+#include <cmath>
 
 using namespace std::chrono_literals;
 
@@ -483,7 +485,38 @@ pcl::PointXYZ computeCentroidOfVoxel(const pcl::PointCloud<pcl::PointXYZ>& vecOf
 
 
 
+
+
+
+
+
+
+
+
+const int M = 30000;           // I don't know how to select this number
+const float K = 0.1;           // default
+const float C = 0.25;          // default
+float OffLineRadius {0.005};  // I need to tune this later (0.0025, 0.005)
+
+float tolerance {OffLineRadius*30/100}; //20% of radius
+
+// Online
+const float Ps = 0.9;                    // probability of success
+const float Octree_resolution = 0.0016;         // I chose this number to keep 50% of the original scene
+
+
 int main() {
+
+    OuterMap generatedMap = DB::create_hashMap(OffLineRadius,tolerance, "../YCB_ply/TWO");
+    DB::to_serialize_hashMap(generatedMap, "Adel.bin");
+    std::string filename = "Adel.bin";
+    OuterMap deserialized_map = DB::to_deserialize_hashMap(filename);
+
+    for (auto key : deserialized_map)
+    {
+        cout << key.first << endl;
+    }
+    cout << "****************************************************************************" << endl;
 
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr S_cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -522,8 +555,7 @@ int main() {
 
     std::vector<int> Indices_of_points_in_one_voxel;
 
-    float resolution = 0.0015;
-    pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree (resolution);
+    pcl::octree::OctreePointCloudSearch<pcl::PointXYZ> octree (Octree_resolution);
     octree.setInputCloud (S_cloud_Box_filtered);
     octree.addPointsFromInputCloud ();
 
@@ -558,34 +590,138 @@ int main() {
     OctreeViewer (fileNAme, resolution);*/
 
 
-    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
-    ne.setInputCloud (downsampled_cloud);
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ> ());
-    ne.setSearchMethod (tree);
-    pcl::PointCloud<pcl::Normal>::Ptr normals_cloud (new pcl::PointCloud<pcl::Normal>);
-    ne.setRadiusSearch (0.6);
-    ne.compute (*normals_cloud);
+    // ********* Lets compute N of iterations N
+    int n = downsampled_cloud->size();
+    int N = (-n * log(1 - Ps)) / (M * K * C);    // number of iterations needed
+    cout << "Number of iterations N : " << N <<endl;
 
-    std::cout << "S* before Normal estimate : " << downsampled_cloud->size()<<std::endl;
-    std::cout << "S* after  Normal estimate : " << normals_cloud->size() << std::endl;
+    // ********* Sample one point randomly, and from this point sample points that are d away from this point
 
-    pcl::PointCloud<pcl::PointXYZLNormal>::Ptr Downsampled_with_normals (new pcl::PointCloud<pcl::PointXYZLNormal>);
-    pcl::concatenateFields (*downsampled_cloud, *normals_cloud, *Downsampled_with_normals);
-    pcl::io::savePLYFile("Downsampled_with_normals.ply", *Downsampled_with_normals);
+    std::vector<int> Index_of_neighboring_points;
+    std::vector<float> pointRadiusSquaredDistance;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr temp_cloud_of_neighboring_points (new pcl::PointCloud<pcl::PointXYZ>);
+
+    pcl::PointXYZ PointA_XYZ;
+    pcl::PointXYZ PointB_XYZ;
+    pcl::PointXYZLNormal PointA_with_normal;
+    pcl::PointXYZLNormal PointB_with_normal;
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr Points_within_the_shpere (new pcl::PointCloud<pcl::PointXYZ>);
+
+    int X {0};
+
+    // I use this kdtree to find the nearest 100 neighbors to PointA, PointB to estimate the normal
 
 
-    //**-----------------------VISUALIZE THE CLOUD ---------------------------------------------------------------------
 
-  /*  std::string fileName = "Centroids_of_Octree_Scene.ply";
-    OctreeViewer(fileName, 0.0015);*/
+    std::vector<int> k_indices;
+    std::vector<float> k_squared_distances;
 
-/*
+    pcl::PointCloud<pcl::PointXYZ>::Ptr neighbors_of_PointA_XYZ (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::Normal>::Ptr Normals_neighbors_of_PointA (new pcl::PointCloud<pcl::Normal>);
+    pcl::PointCloud<pcl::PointXYZLNormal>::Ptr neighbors_of_PointA_with_Normal (new pcl::PointCloud<pcl::PointXYZLNormal>);
 
-    pcl::octree::OctreePointCloudSearch<pcl::PointXYZLNormal> octree2 (resolution);
-    octree2.setInputCloud (S_start_full);
-    octree2.addPointsFromInputCloud ();
-*/
 
+    pcl::PointCloud<pcl::PointXYZ>::Ptr neighbors_of_PointB (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::Normal>::Ptr Normals_neighbors_of_PointB (new pcl::PointCloud<pcl::Normal>);
+    pcl::PointCloud<pcl::PointXYZLNormal>::Ptr neighbors_of_PointB_with_Normal (new pcl::PointCloud<pcl::PointXYZLNormal>);
+
+
+    neighbors_of_PointA_XYZ->clear();
+    neighbors_of_PointB->clear();
+
+    pcl::PointXYZLNormal PointA_XYZNorm = 0;
+    pcl::PointXYZLNormal PointB_XYZNorm = 0;
+
+    std::string DESCRIPTOR_in_str;
+
+    for (int i = 0; i < N ; ++i) {
+
+        int index_of_pointA = rand() % downsampled_cloud->size();
+        PointA_XYZ = downsampled_cloud->points[index_of_pointA];
+
+        pcl::KdTreeFLANN<pcl::PointXYZ> kdtree_PointA;
+        kdtree_PointA.setInputCloud(downsampled_cloud);
+
+        std::vector<int> pointIdxKNNSearch;
+        std::vector<float> pointKNNSquaredDistance;
+
+        if (kdtree_PointA.radiusSearch(PointA_XYZ, OffLineRadius, pointIdxKNNSearch, pointKNNSquaredDistance) > 0) {
+            for (auto Idx: pointIdxKNNSearch) {
+                neighbors_of_PointA_XYZ->push_back(downsampled_cloud->points[Idx]);
+            }
+        }
+
+        pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+        ne.setInputCloud(neighbors_of_PointA_XYZ);
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+        ne.setSearchMethod(tree);
+        ne.setRadiusSearch(OffLineRadius);
+        ne.compute(*Normals_neighbors_of_PointA);
+        pcl::concatenateFields(*neighbors_of_PointA_XYZ, *Normals_neighbors_of_PointA,
+                               *neighbors_of_PointA_with_Normal);
+
+
+        for (auto P_A : *neighbors_of_PointA_with_Normal) {
+
+            if (P_A.x == PointA_XYZ.x && P_A.y == PointA_XYZ.y && P_A.z == PointA_XYZ.z) {
+                PointA_XYZNorm = P_A;
+            }
+        }
+
+        // So far, we have all points around (pointA) with normal
+        pcl::KdTreeFLANN<pcl::PointXYZLNormal> kdtree_Point2;
+        kdtree_Point2.setInputCloud(neighbors_of_PointA_with_Normal);
+
+        std::vector<int> pointIdxKNNSearch_2;
+        std::vector<float> pointKNNSquaredDistance_2;
+
+        if (kdtree_Point2.radiusSearch(PointA_XYZNorm, OffLineRadius, pointIdxKNNSearch_2,
+                                       pointKNNSquaredDistance_2) > 0) {
+            for (int In = 0; In < pointKNNSquaredDistance_2.size(); ++In) {
+                if (sqrt(pointKNNSquaredDistance_2[In]) > (OffLineRadius - tolerance) &&
+                    sqrt(pointKNNSquaredDistance_2[In]) < (OffLineRadius + tolerance)) {
+                    PointB_XYZNorm = (*neighbors_of_PointA_with_Normal)[In];
+                  /*  cout << "PointB is : " << PointB_XYZNorm << endl;
+                    cout << "PointA is : " << PointA_XYZNorm << endl;*/
+                    break;
+                }
+            }
+
+
+            auto DESCRIPTOR = Compute_the_descriptor(PointA_XYZNorm, PointB_XYZNorm);
+            DESCRIPTOR_in_str = fromVectorToString(DESCRIPTOR);
+            cout << DESCRIPTOR_in_str << endl;
+
+            for (auto Key :deserialized_map )
+            {
+                if (Key.first == DESCRIPTOR_in_str)
+                {
+                   // cout << "Found it +++++++++++++++++++++++++++++++++++++++++++++++++" << endl;
+                }
+            }
+
+        }
+
+
+        neighbors_of_PointA_with_Normal->clear();
+        PointA_XYZNorm = {0,0,0,0,0,0,0,0};
+        PointB_XYZNorm = {0,0,0,0,0,0,0,0};
+
+
+    }
+
+
+        Eigen::Vector3f OneDescriptor = {0.294422,1.585185,1.645098};
+        std::string SEARCH_DESCRIPTOR = fromVectorToString(OneDescriptor);
+
+        for (auto Key :deserialized_map )
+        {
+            if (Key.first == SEARCH_DESCRIPTOR)
+            {
+                cout << "Found it +++++++++++++++++++++++++++++++++++++++++++++++++" << endl;
+            }
+        }
 
 
 
